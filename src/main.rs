@@ -1,5 +1,7 @@
 use colored::Colorize;
 
+const BOARD_SIZE: usize = 8;
+
 #[derive(Clone, Copy)]
 enum ChessPiece {
     Black(PieceType),
@@ -27,10 +29,41 @@ impl PieceType {
             PieceType::Pawn => '♙',
         }
     }
+
+    fn is_move_valid(&self, from: (usize, usize), to: (usize, usize)) -> bool {
+        match self {
+            PieceType::King => {
+                let dx = (from.0 as i32 - to.0 as i32).abs();
+                let dy = (from.1 as i32 - to.1 as i32).abs();
+                dx <= 1 && dy <= 1
+            }
+            PieceType::Queen => {
+                let dx = (from.0 as i32 - to.0 as i32).abs();
+                let dy = (from.1 as i32 - to.1 as i32).abs();
+                dx == dy || from.0 == to.0 || from.1 == to.1
+            }
+            PieceType::Rook => from.0 == to.0 || from.1 == to.1,
+            PieceType::Bishop => {
+                let dx = (from.0 as i32 - to.0 as i32).abs();
+                let dy = (from.1 as i32 - to.1 as i32).abs();
+                dx == dy
+            }
+            PieceType::Knight => {
+                let dx = (from.0 as i32 - to.0 as i32).abs();
+                let dy = (from.1 as i32 - to.1 as i32).abs();
+                (dx == 2 && dy == 1) || (dx == 1 && dy == 2)
+            }
+            PieceType::Pawn => {
+                let dx = (from.0 as i32 - to.0 as i32).abs();
+                let dy = (from.1 as i32 - to.1 as i32).abs();
+                dx == 0 && dy == 1
+            }
+        }
+    }
 }
 
 struct ChessBoard {
-    squares: [[Option<ChessPiece>; 8]; 8],
+    squares: [[Option<ChessPiece>; BOARD_SIZE]; BOARD_SIZE],
 }
 
 impl ChessBoard {
@@ -47,12 +80,12 @@ impl ChessBoard {
                     Some(ChessPiece::Black(PieceType::Knight)),
                     Some(ChessPiece::Black(PieceType::Rook)),
                 ],
-                [Some(ChessPiece::Black(PieceType::Pawn)); 8],
-                [None; 8],
-                [None; 8],
-                [None; 8],
-                [None; 8],
-                [Some(ChessPiece::White(PieceType::Pawn)); 8],
+                [Some(ChessPiece::Black(PieceType::Pawn)); BOARD_SIZE],
+                [None; BOARD_SIZE],
+                [None; BOARD_SIZE],
+                [None; BOARD_SIZE],
+                [None; BOARD_SIZE],
+                [Some(ChessPiece::White(PieceType::Pawn)); BOARD_SIZE],
                 [
                     Some(ChessPiece::White(PieceType::Rook)),
                     Some(ChessPiece::White(PieceType::Knight)),
@@ -94,67 +127,71 @@ impl ChessBoard {
         let from_piece_opt = self.squares[from.0][from.1];
         let to_piece = self.squares[to.0][to.1];
 
+        if from == to {
+            return false;
+        }
+
         match from_piece_opt {
-            Some(fromPiece) => match to_piece {
-                Some(toPiece) => {
-                    if fromPiece == toPiece {
-                        return false;
-                    }
+            Some(from_piece) => match to_piece {
+                Some(to_piece) => match from_piece {
+                    ChessPiece::Black(t) => match to_piece {
+                        ChessPiece::Black(_) => {
+                            return false;
+                        }
+                        ChessPiece::White(t) => {
+                            return t.is_move_valid(from, to);
+                        }
+                    },
+                    ChessPiece::White(t) => match to_piece {
+                        ChessPiece::Black(t) => {
+                            return t.is_move_valid(from, to);
+                        }
+                        ChessPiece::White(_) => {
+                            return false;
+                        }
+                    },
+                },
+                None => {
+                    return false;
                 }
-                None => {}
             },
             None => {
                 return false;
             }
         }
-
-        if from_piece_opt.is_none() {
-            return false;
-        }
-        if from_piece_opt.is_some() && to_piece.is_some() {}
-
-        match from_piece_opt {
-            Some(ChessPiece::Black(PieceType::King)) => self.check_king(from, to),
-            Some(ChessPiece::Black(PieceType::Queen)) => self.check_queen(from, to),
-            Some(ChessPiece::Black(PieceType::Rook)) => self.check_rook(from, to),
-            Some(ChessPiece::Black(PieceType::Bishop)) => self.check_bishop(from, to),
-            Some(ChessPiece::Black(PieceType::Knight)) => self.check_knight(from, to),
-            Some(ChessPiece::Black(PieceType::Pawn)) => self.check_pawn(from, to),
-            _ => false,
-        }
-
-        true
     }
 }
 
 fn main() {
     let mut board = ChessBoard::new();
-    board.print();
     loop {
-        let mut input = String::new();
-        if let Err(_) = std::io::stdin().read_line(&mut input) {
-            println!("Error reading input");
-            continue;
-        }
-        match parse_input(&input) {
-            Some(((fromx, fromy), (tox, toy))) => {
-                println!(
-                    "Legal move: {}",
-                    board.check_move((fromx, fromy), (tox, toy))
-                );
-                if board.check_move((fromx, fromy), (tox, toy)) {
-                    board.move_piece((fromx, fromy), (tox, toy));
-                    board.print();
-                }
-            }
-            None => {
-                println!("Invalid input");
-                continue;
-            }
-        };
+        take_turn(&mut board);
+        board.print();
     }
 }
 
+// Will take in user input, parse it, and then check if the move is legal. If so, it will move the piece.
+fn take_turn(board: &mut ChessBoard) {
+    let mut input = String::new();
+    if let Err(_) = std::io::stdin().read_line(&mut input) {
+        println!("Error reading input");
+        return;
+    }
+
+    match parse_input(&input) {
+        Some(((fromx, fromy), (tox, toy))) => {
+            if board.check_move((fromx, fromy), (tox, toy)) {
+                board.move_piece((fromx, fromy), (tox, toy));
+            }
+        }
+        None => {
+            println!("Invalid input");
+            return;
+        }
+    };
+}
+
+// Will parse the input string into a tuple of two tuples, each representing a coordinate on the board. If the input is invalid, it will return None.
 fn parse_input(input: &str) -> Option<((usize, usize), (usize, usize))> {
     let parts: Vec<&str> = input.split_whitespace().collect();
     if parts.len() != 4 {
